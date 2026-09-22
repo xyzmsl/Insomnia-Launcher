@@ -1,0 +1,113 @@
+name: Build releases
+
+# Builds the one-file binary for every OS and attaches it to the release for
+# the current tag (auto-update runs on exactly this: asset name must contain
+# "InsomniaLauncher" — see app/updater.py:_asset_match — so the launcher can
+# fetch, self-replace in place and relaunch).
+#
+# `workflow_dispatch` lets you run this ad-hoc on any tag (including an already
+# published one, e.g. to add the Windows exe to v0.1.0). `tags: v*` runs it
+# automatically on every new tag push.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to attach binaries to (defaults to latest release if empty)"
+        required: false
+        default: ""
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            build: packaging/build_linux.sh
+            asset_glob: dist/InsomniaLauncher
+          - os: windows-latest
+            build: packaging/build_windows.bat
+            asset_glob: dist/InsomniaLauncher.exe
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime deps
+        run: pip install -r requirements.txt
+
+      - name: Run benthic build script
+        shell: bash
+        run: ${{ matrix.build }}
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.os }}
+          path: ${{ matrix.asset_glob }}
+          if-no-files-found: error
+
+  attach:
+    name: Attach binaries to release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: binaries
+
+      - name: Resolve tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -e
+          tag="$INPUT_TAG"
+          if [ -z "$tag" ]; then
+            tag="${GITHUB_REF_NAME}"
+          fi
+          if [ -z "$tag" ] || [ "$tag" = "main" ] || [ "$tag" = "master" ]; then
+            tag="$(gh release list --limit 1 --json tagName -q '.[0].tagName')"
+          fi
+          echo "resolved_tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -e
+          tag="${{ steps.tag.outputs.resolved_tag }}"
+          echo "Tagging/publishing under: $tag"
+          # Tag the current HEAD if the tag is new; reuse it if it already exists.
+          git fetch --tags --force
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "Tag $tag already exists."
+          else
+            git tag "$tag"
+            git push origin "$tag"
+          fi
+          # Create the release (no-op idempotent if it exists).
+          gh release create "$tag" --title "${tag}" --generate-notes bin2git/not/uploaded 2>/dev/null || true
+          # Upload/overwrite each built asset.
+          for f in binaries/*; do
+            [ -f "$f" ] || continue
+            echo "Uploading $f"
+            gh release upload "$tag" "$f" --clobber
+          done
+          gh release view "$tag" --json name,assets -q '{name:.name, assets:[.assets[].name]}'
