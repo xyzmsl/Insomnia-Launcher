@@ -56,25 +56,28 @@ For Steam playtime, it queries Valve's Steam Web API with your own free API key 
 
 ### Windows
 
-1. Build the exe once:
+Just **download the single portable exe**
+([releases](https://github.com/xyzmsl/Insomnia-Launcher/releases)) — click
+`InsomniaLauncher.exe`, and the launcher opens. No install step, no admin
+rights, no registry entries.
 
-   ```bat
-   packaging\build_windows.bat
-   ```
+- Put the exe **anywhere you like** (Desktop, `Games\`, a USB stick). The
+  launcher **never needs to be "installed"** — it keeps its own data, Steam API
+  key, settings and library DB under `%LOCALAPPDATA%\Insomnia Launcher\data`
+  and ignores whatever folder you run it from.
+- **Upgrading is automatic:** when a new release exists the launcher prompts
+  you, downloads it and swaps in the new exe by replacing `InsomniaLauncher.exe`
+  — your library and key are left untouched. If you keep its icon/Start-menu
+  pin, just re-pin after an update if you'd rather not download manually.
+- **Running from a source checkout** instead of the release exe? Build it once
+  with the same single-file result:
 
-2. Build the installer (requires [Inno Setup 6](https://jrsoftware.org/isinfo.php),
-   `iscc` in your PATH):
+  ```bat
+  packaging\build_windows.bat
+  ```
 
-   ```bat
-   packaging\build_windows_installer.bat
-   ```
-
-   This produces `dist\InsomniaLauncherSetup.exe`. Run it, pick Install, and the
-   launcher is registered in your Start menu with an optional desktop shortcut.
-   No admin rights required — everything installs under `%LOCALAPPDATA%`.
-   Settings, your Steam API key and library DB live under
-   `%LOCALAPPDATA%\Insomnia Launcher\data` and survive upgrades; uninstalling
-   the launcher leaves your installed games untouched.
+  This produces `dist\InsomniaLauncher.exe` — one self-contained file you can
+  drop anywhere and run. Data + Steam key are kept and survive rebuilds.
 
 ---
 
@@ -146,7 +149,7 @@ ui/
   cards.py            cover-art card widget
   dialogs.py          Settings / add-game dialogs
   theme.py            Colour palette
-packaging/            Build scripts (Linux/Windows) + Inno installer
+packaging/            Build scripts (Linux/Windows single-exe + Linux installer)
 ```
 
 Requirements: Python 3.10+ with the packages in `requirements.txt`
