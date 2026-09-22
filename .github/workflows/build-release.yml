@@ -1,18 +1,15 @@
 name: Build releases
 
-# Hand-rolled release pipeline (no third-party actions except the official
-# setup/upload ones):
+# One-file binary per OS, built on that OS's own runner, attached to the
+# release for a tag (workflow_dispatch input `tag`, or the ref/tag that pushed
+# this file). Both asset names contain "InsomniaLauncher", which is exactly
+# what app/updater.py:_asset_match looks for — so the app's own "Download now"
+# prompt grabs the right asset for its OSche, self-replaces in place and
+# relaunches.
 #
-#   1. Builds a one-file binary per OS on that OS's own runner —
-#        Linux   -> dist/InsomniaLauncher
-#        Windows -> dist/InsomniaLauncher.exe
-#   2. Attaches BOTH to the GitHub Release for the given tag (default: the
-#      latest existing tag), overwriting stale assets.
-#
-# The app's built-in updater (app/updater.py) downloads exactly the asset that
-# contains "InsomniaLauncher" for its own OS, replaces its own binary in place
-# and relaunches — so these are precisely the files the "Download now" prompt
-# swaps in.
+# No shell ternary, no &&/|| value tricks: the matrix carries a static
+# `shell:` column (bash / cmd) and the build step does a plain
+# `${{ matrix.shell }}` named-value fetch — guaranteed parseable.
 
 on:
   workflow_dispatch:
@@ -42,36 +39,19 @@ env:
 
 jobs:
   build:
-    name: Build ${{ matrix.os }}
+    name: Build ${{ matrix.kind }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
-            pyinstaller_command: |
-              python -m PyInstaller \
-                --clean \
-                --onefile \
-                --windowed \
-                --name InsomniaLauncher \
-                --add-data "ui/assets/icon.png:ui/assets" \
-                main.py
-            artifact: InsomniaLauncher
-            path: dist/InsomniaLauncher
             kind: linux
+            shell: bash
+            pyinstaller_runs_as: bash
           - os: windows-latest
-            pyinstaller_command: |
-              python -m PyInstaller ^
-                --clean ^
-                --onefile ^
-                --windowed ^
-                --name InsomniaLauncher ^
-                --add-data "ui\\assets\\icon.png;ui\\assets" ^
-                main.py
-            artifact: InsomniaLauncher.exe
-            path: dist/InsomniaLauncher.exe
             kind: windows
+            shell: cmd
 
     steps:
       - uses: actions/checkout@v4
@@ -86,62 +66,7 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: PyInstaller build
-        shell: ${{ matrix.kind == 'windows' && 'cmd' || 'bash' }}
+        shell: ${{ matrix.shell }}
         run: |
-          ${{ matrix.pyinstaller_command }}
-
-      - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.path }}
-          if-no-files-found: error
-
-  attach:
-    name: Attach binaries to release
-    needs: build
-    runs-on: ubuntu-latest
-    if: inputs.upload != false
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          merge-multiple: true
-          path: binaries
-
-      - name: Resolve the tag to attach to
-        id: tag
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -e
-          tag="${{ inputs.tag }}"
-          if [ -z "$tag" ]; then
-            tag="${GITHUB_REF_NAME}"
-          fi
-          if [ -z "$tag" ] || [ "$tag" = "main" ] || [ "$tag" = "master" ]; then
-            tag="$(gh release list --limit 1 --json tagName -q '.[0].tagName')"
-          fi
-          echo "resolved_tag=${tag}" >> "$GITHUB_OUTPUT"
-
-      - name: Publish / update release
-        id: publish
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -e
-          tag="${{ steps.tag.outputs.resolved_tag }}"
-          echo "Attaching binaries under tag: $tag"
-
-          # Create the release idempotently (fails harmlessly if it exists).
-          gh release create "$tag" --title "$tag" --generate-notes >/dev/null 2>&1 || true
-
-          # Upload/overwrite every built binary.
-          for f in binaries/*; do
-            [ -f "$f" ] || continue
-            echo "Uploading $(basename "$f")"
-            gh release upload "$tag" "$f" --clobber
-          done
-
-          gh release view "$tag" --json name,assets -q '{name:.name, assets:[.assets[].name]}'
+          cd "${{ github.workspace }}"
+          ${{ matrix.kind == 'linux' && 'PYI_LINUX' || 'PYI_WIN' }}
