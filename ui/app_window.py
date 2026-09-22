@@ -933,6 +933,10 @@ class AppWindow(tk.Tk):
         if messagebox.askyesno(
             "New version available",
             f"Version {version} is available.\n\n"
+            "Insomnia Launcher is an unsigned open-source build, so Windows "
+            "may show a SmartScreen warning when the new file arrives — that "
+            "is expected. Click More info → Run anyway, then it replaces "
+            "itself and relaunches.\n\n"
             "Download now and install it?",
             parent=self,
         ):

@@ -61,6 +61,21 @@ Just **download the single portable exe**
 `InsomniaLauncher.exe`, and the launcher opens. No install step, no admin
 rights, no registry entries.
 
+> **Windows SmartScreen / antivirus "warning"? That's expected — here's why.**
+> This open-source app is **unsigned** (a paid code-signing certificate costs a
+> third-party CA and yearly renewal — a free/open-source project just doesn't
+> have one). Windows therefore flags *every* unsigned download with the blue
+> "Windows protected your PC" screen. What to do: click **More info → Run
+> anyway**. That's about *trust*, not *safety*:
+>
+> - It's **not a virus** and nothing was uploaded from your machine — the app
+>   is fully offline except (a) the optional Steam API call using *your own*
+>   keyhare and (b) the update check that only reads the GitHub release feed.
+> - Everything runs as your **normal user** — no admin rights, no driver, no
+>   registry, no system changes.
+> - The more people run it, the faster Windows learns it's legit — that's the
+>   honest, signed-alternative-free route for open-source Windows software.
+
 - Put the exe **anywhere you like** (Desktop, `Games\`, a USB stick). The
   launcher **never needs to be "installed"** — it keeps its own data, Steam API
   key, settings and library DB under `%LOCALAPPDATA%\Insomnia Launcher\data`
